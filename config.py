@@ -10,7 +10,7 @@ def embed(textos):
     v = np.array(resp["embeddings"])
     return v / np.linalg.norm(v, axis=1, keepdims=True)
 
-def buscar_lei(conn, pergunta, k=3):
+def buscar_lei(conn, pergunta, k=1):
     q = embed([pergunta])[0]
     params = {"q": q, "k": k}
     where = ""

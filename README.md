@@ -117,7 +117,9 @@ A reindexação apaga **apenas as linhas da lei** que está sendo processada e g
 
 ## Avaliação
 
-Conjunto inicial de 10 perguntas escritas por mim, cada uma com o artigo esperado.
+O conjunto inicial tinha 10 perguntas. Nessa primeira rodada, o artigo esperado ficou em primeiro em 8/10 casos e entre os três primeiros em 10/10.
+
+A avaliação ampliada está em `avaliacao.csv` e é executada com `python avaliar.py`. Ela contém 15 perguntas: 14 com artigo esperado e uma sem resposta esperada no CDC. Com `k=1`, o resultado atual é **11/14 (78,57%)**. Esse número permaneceu igual depois das duas correções de limpeza descritas abaixo.
 
 | Pergunta (resumo) | Esperado | Posição |
 |---|:---:|:---:|
@@ -132,9 +134,9 @@ Conjunto inicial de 10 perguntas escritas por mim, cada uma com o artigo esperad
 | Consequência da cláusula abusiva | 51 | 1º |
 | Recusa em cumprir a oferta | 35 | 1º |
 
-**Acerto no topo: 8/10 · Acerto entre os 3 primeiros: 10/10**
+**Resultado da rodada inicial: acerto no topo 8/10 · acerto entre os 3 primeiros 10/10**
 
-Os erros são os casos mais informativos:
+Na rodada inicial, os erros mais informativos foram:
 
 - **Venda casada.** O termo é da prática e da doutrina, não da lei: o art. 39, I fala em "condicionar o fornecimento de produto ou de serviço ao fornecimento de outro". Além disso, o inciso fica diluído num artigo com 14 incisos. Os scores ficaram baixos (~0,45), sinal de baixa confiança.
 - **Garantia legal.** O art. 50 ("garantia contratual... mediante termo escrito") ficou à frente do art. 24 ("a garantia legal... **independe** de termo expresso") por repetir as palavras da pergunta. Embeddings captam bem o assunto, mas mal a negação.
@@ -144,15 +146,14 @@ Os erros são os casos mais informativos:
 ## Limitações conhecidas
 
 - Artigos em forma de lista (arts. 6º, 39 e 51) concentram muitos assuntos num único vetor, o que dificulta encontrar um inciso específico.
-- Dois resíduos de limpeza: um "Vigência" sem parênteses no art. 6º, III, e uma nota editorial do Planalto no art. 39, XI.
 - As anotações ficam no nível do artigo, sem indicar qual dispositivo foi alterado.
-- O conjunto de avaliação ainda é pequeno e não inclui perguntas sem resposta no CDC.
+- O conjunto de avaliação ainda é pequeno. Há uma pergunta sem artigo esperado no CDC, mas o buscador ainda retorna o artigo mais próximo e não avalia abstenção.
 
 ## Próximos passos
 
-- [ ] Avaliação automatizada (`avaliacao.csv` + script de métricas), com mais perguntas em linguagem do dia a dia e perguntas sem resposta na lei
-- [ ] Corrigir os resíduos de limpeza e medir o efeito
-- [ ] Chunks adicionais por inciso nos artigos-lista, sempre com o caput, comparando com a avaliação
+- [x] Avaliação ampliada em `avaliacao.csv` e execução por `avaliar.py`
+- [x] Corrigir os resíduos de limpeza no art. 6º, III, e no art. 39, XI, e medir o efeito; o resultado permaneceu em 11/14
+- [ ] Testar chunks adicionais por inciso nos artigos-lista, sempre com o caput; começar pelo art. 39 e comparar com a avaliação
 - [ ] Geração da resposta com LLM, **citando o artigo** que a fundamenta
 - [ ] Incluir o Código Civil e outras leis
 
@@ -190,4 +191,5 @@ curl -L -A "Mozilla/5.0" -o dados/cdc.htm \
 # indexação e consulta
 python indexar.py
 python consultas.py
+python avaliar.py
 ```

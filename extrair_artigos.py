@@ -73,7 +73,17 @@ def limpar_artigos(artigos):
             if "(vetado)" in d.lower():
                 continue
             anotacoes += [a.strip(" ()") for a in PADRAO_ANOTACAO.findall(d)]
-            dispositivos.append(PADRAO_ANOTACAO.sub("", d).strip())
+            texto_limpo = PADRAO_ANOTACAO.sub("", d).strip()
+            texto_limpo = re.sub(r"\s+Vigência$", "", texto_limpo, flags=re.IGNORECASE)
+            texto_limpo = re.sub(
+            r"^XI - Dispositivo incluído pela MPV nº 1\.890-67, de 22\.10\.1999, "
+            r"transformado em inciso XIII, quando da conversão na Lei nº 9\.870, de 23\.11\.1999$",
+            "",
+            texto_limpo,
+            flags=re.IGNORECASE,
+        )
+            if texto_limpo:
+                dispositivos.append(texto_limpo)
 
         if not dispositivos:
             continue
