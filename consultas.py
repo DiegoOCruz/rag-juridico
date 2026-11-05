@@ -5,7 +5,8 @@ import time
 from config import (
     embed,
     CONEXAO,
-    buscar_lei
+    buscar_lei,
+    buscar_multiplas
 )
 
 if __name__ == "__main__":
@@ -19,16 +20,23 @@ if __name__ == "__main__":
         "Em quais situações o consumidor tem direito à restituição em dobro de valores cobrados indevidamente?",
         "A garantia legal depende de termo escrito fornecido pelo fabricante?",
         "Qual é a consequência jurídica de uma cláusula abusiva em um contrato de consumo?",
-        "Quais são as opções do consumidor quando o fornecedor se recusa a cumprir uma oferta?"
+        "Quais são as opções do consumidor quando o fornecedor se recusa a cumprir uma oferta?",
     ]
     inicio = time.time()
     with psycopg.connect(CONEXAO) as conn:
         conn.execute("SET enable_seqscan = off")
         register_vector(conn)
-        for c in consulta:
-            print(f"\n> {c}")
-            for similaridade, n_art, texto in buscar_lei(conn, c): 
-                print(f"  {similaridade:.2f}  Artigo {n_art}  Texto: {texto}")
-                print("-" * 80)
+        for pergunta in consulta:
+            print(f"\n> {pergunta}\n")
+
+            resultados = buscar_lei(conn, pergunta, k=5)
+            for similaridade, n_art, referencia, texto in resultados:
+                print(
+                    f"  {similaridade:.2f}  "
+                    f"Artigo {n_art}-{referencia}  "
+                    f"Texto: {texto}"
+                )
+
+            print("-" * 80)
     fim = time.time()
     print(f"\nTempo de execução: {fim - inicio:.2f} segundos")

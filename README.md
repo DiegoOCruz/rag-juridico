@@ -28,12 +28,12 @@ HTML oficial do Planalto
         │
         ▼
 extrair_artigos.py ── lê o HTML, agrupa os dispositivos por artigo,
-        │              remove vetados e separa as anotações de alteração
+        │              remove vetados, anotações e identifica a hierarquia
         ▼
-indexar.py ────────── monta o texto de cada artigo, gera os embeddings (bge-m3)
-        │              e grava no PostgreSQL + pgvector
+indexar.py ────────── monta artigos e trechos pesquisáveis, gera embeddings
+        │              (bge-m3) e grava no PostgreSQL + pgvector
         ▼
-consultas.py ──────── vetoriza a pergunta e busca os artigos mais próximos
+consultas.py ──────── vetoriza a pergunta e busca os trechos mais próximos
                        pela distância de cosseno
 ```
 
@@ -75,8 +75,26 @@ Antes de definir a regra, todos os trechos entre parênteses foram contados e cl
 
 A maioria dos parênteses é **conteúdo da lei**: "prazo de 30 (trinta) dias", "(Conmetro)", "(art. 170 da Constituição Federal)". Por isso a limpeza usa uma lista explícita do que remover, e não "remover tudo entre parênteses", o que apagaria prazos. As anotações removidas vão para uma coluna própria (`TEXT[]`), disponíveis para citação e para filtros.
 
-### Chunking: um artigo por chunk
-Incisos e alíneas isolados perdem o sentido: "a) por iniciativa direta;" só significa algo junto ao inciso e ao caput do art. 4º. Cada chunk é, portanto, um artigo completo, com caput, parágrafos, incisos e alíneas.
+### Chunking: artigo completo e trechos por inciso
+O banco separa duas funções:
+
+- `artigos` preserva cada artigo completo, com seus metadados;
+- `trechos` guarda as unidades que participam da busca vetorial.
+
+A regra atual é:
+
+- artigo sem incisos: um trecho `integral` com o artigo completo;
+- artigo com incisos: um trecho para cada inciso, sempre com o caput;
+- inciso dentro de parágrafo: o parágrafo pai também entra no trecho.
+
+Por isso, os dois incisos abaixo têm referências diferentes:
+
+```text
+12-§1-I
+12-§3-I
+```
+
+Incisos com o mesmo algarismo em parágrafos diferentes não são confundidos. Parágrafos e alíneas ainda permanecem no texto completo do artigo; a divisão específica por alínea fica para uma etapa futura.
 
 O texto vetorizado começa com o **nome da lei e a hierarquia**:
 
@@ -92,26 +110,40 @@ Sem a hierarquia, o "desta Seção" do art. 17 não teria referência. Com o nom
 
 O maior artigo (art. 51, cerca de 3 mil caracteres) cabe com folga no limite do modelo de embeddings.
 
+### Resultado da indexação por trechos
+O CDC foi indexado com **118 artigos** e **258 trechos**. O art. 39, por exemplo, possui 13 trechos de inciso; o art. 12 possui seis, com referências `§1-I` a `§3-III`.
+
 ### Um banco para todas as leis
 As leis se relacionam, e uma pergunta pode ter resposta em mais de uma. Por isso há um único banco, com a lei como coluna, em vez de um banco por lei. Assim é possível buscar em toda a legislação ou filtrar uma só (`WHERE lei = 'CDC'`) na mesma consulta.
 
 ```sql
-CREATE TABLE dispositivos (
-    id         SERIAL PRIMARY KEY,
-    lei        TEXT NOT NULL,
-    numero_art TEXT NOT NULL,          -- texto, para aceitar "54-A"
-    titulo     TEXT,
-    capitulo   TEXT,
-    secao      TEXT,
-    anotacoes  TEXT[],
-    texto      TEXT NOT NULL,
-    embedding  vector(1024) NOT NULL,
-    UNIQUE (lei, numero_art)
+CREATE TABLE artigos (
+    id             SERIAL PRIMARY KEY,
+    lei            TEXT NOT NULL,
+    numero_artigo  TEXT NOT NULL,
+    titulo         TEXT,
+    capitulo       TEXT,
+    secao          TEXT,
+    anotacoes      TEXT[],
+    texto          TEXT NOT NULL,
+    UNIQUE (lei, numero_artigo)
+);
+
+CREATE TABLE trechos (
+    id          SERIAL PRIMARY KEY,
+    artigo_id   INTEGER NOT NULL REFERENCES artigos(id) ON DELETE CASCADE,
+    tipo        TEXT NOT NULL CHECK (tipo IN ('integral', 'inciso')),
+    referencia  TEXT NOT NULL,
+    texto       TEXT NOT NULL,
+    embedding   vector(1024) NOT NULL,
+    UNIQUE (artigo_id, tipo, referencia)
 );
 ```
 
+`artigos` é a fonte completa; `trechos` é a camada de recuperação. A chave estrangeira faz cada trecho apontar para seu artigo, e `ON DELETE CASCADE` remove os trechos quando o artigo é removido.
+
 ### Indexação idempotente
-A reindexação apaga **apenas as linhas da lei** que está sendo processada e grava de novo, numa única transação. O banco fica sempre igual à versão atual da lei, inclusive se um artigo deixar de existir, e as demais leis não são afetadas. A restrição `UNIQUE (lei, numero_art)` funciona como teste automático da extração: um artigo duplicado gera erro, em vez de passar em silêncio.
+A reindexação apaga **apenas as linhas da lei** que está sendo processada e grava de novo, numa única transação. O banco fica sempre igual à versão atual da lei, inclusive se um artigo deixar de existir, e as demais leis não são afetadas. As restrições de unicidade de `artigos` e `trechos` funcionam como testes automáticos da extração: uma duplicidade gera erro, em vez de passar em silêncio.
 
 ---
 
@@ -119,7 +151,45 @@ A reindexação apaga **apenas as linhas da lei** que está sendo processada e g
 
 O conjunto inicial tinha 10 perguntas. Nessa primeira rodada, o artigo esperado ficou em primeiro em 8/10 casos e entre os três primeiros em 10/10.
 
-A avaliação ampliada está em `avaliacao.csv` e é executada com `python avaliar.py`. Ela contém 15 perguntas: 14 com artigo esperado e uma sem resposta esperada no CDC. Com `k=1`, o resultado atual é **11/14 (78,57%)**. Esse número permaneceu igual depois das duas correções de limpeza descritas abaixo.
+A avaliação ampliada está em `avaliacao.csv` e é executada com `python avaliar.py`. Ela contém 15 perguntas: 14 com artigo esperado e uma sem resposta esperada no CDC.
+
+Antes da divisão em trechos, o baseline era **11/14 (78,57%)** com `k=1`. Depois da indexação atual, a avaliação mede duas dimensões:
+
+- **Top-1:** o primeiro resultado é o artigo esperado;
+- **Recall@5:** o artigo esperado aparece entre os cinco resultados.
+
+Resultado atual: **Top-1 = 10/14 (71,43%)** e **Recall@5 = 12/14 (85,71%)**.
+
+O art. 35, por exemplo, aparece em segundo lugar na pergunta sobre preço anunciado. As duas falhas que não chegam ao top 5 são venda casada e seguro vinculado a financiamento, ambas esperadas no art. 39.
+
+### Piloto de múltiplas consultas
+
+Uma pergunta cotidiana sobre seguro e financiamento não recuperou o art. 39 no top 10. Quando a busca recebeu também uma consulta separada com a redação jurídica do dispositivo, o `39-I` ficou em primeiro, com similaridade `0,71`.
+
+O mesmo resultado ocorreu para a pergunta sobre venda casada. Isso indica uma lacuna entre a linguagem cotidiana e a redação legal, e mostra que combinar consultas independentes pode melhorar a recuperação. Esse piloto ainda não foi aplicado à avaliação oficial, para não introduzir manualmente informação jurídica nas perguntas de teste.
+
+### Primeiro protótipo de resposta
+
+O `responder.py` usa os trechos recuperados como contexto para o modelo `qwen3.8:27b`. No caso do seguro condicionado ao financiamento, o modelo recuperou o `39-I` e respondeu citando o artigo.
+
+Também foi testada uma pergunta fora do escopo do CDC (prazo para contestar multa de trânsito). Mesmo recebendo trechos semanticamente próximos, o modelo informou que o contexto não era suficiente e não inventou uma resposta. Essa abstenção é um requisito de segurança do RAG.
+
+### Limitação estrutural identificada
+
+Os experimentos mostraram que a busca vetorial funciona bem quando a pergunta usa uma formulação próxima da redação legal. Ela tem dificuldade, porém, de fazer sozinha a ponte entre uma situação cotidiana e o conceito jurídico correspondente. Por exemplo, “a loja quer obrigar um seguro junto com o financiamento” não recupera consistentemente o `39-I`, enquanto a formulação “condicionar o fornecimento de um produto ou serviço ao fornecimento de outro” recupera esse trecho em primeiro lugar.
+
+A geração também não deve ser tratada como fonte jurídica: mesmo com temperatura baixa e um prompt restritivo, o modelo pode citar dispositivos que não foram recuperados. Por isso, temperatura e `k` não resolvem isoladamente o problema.
+
+Conclusão do protótipo:
+
+```text
+redação jurídica direta → recuperação consistente
+pergunta cotidiana      → depende de uma ponte especializada
+trechos recuperados     → modelo consegue explicar e resumir
+citações                → devem ser validadas pelo programa
+```
+
+Uma versão mais confiável precisará combinar busca vetorial com busca lexical ou híbrida, vocabulário jurídico/reescrita de consulta e validação programática das citações.
 
 | Pergunta (resumo) | Esperado | Posição |
 |---|:---:|:---:|
@@ -145,7 +215,8 @@ Na rodada inicial, os erros mais informativos foram:
 
 ## Limitações conhecidas
 
-- Artigos em forma de lista (arts. 6º, 39 e 51) concentram muitos assuntos num único vetor, o que dificulta encontrar um inciso específico.
+- Vários trechos do mesmo artigo podem ocupar posições consecutivas; isso melhora a cobertura, mas reduz a diversidade dos resultados.
+- A avaliação atual ainda compara o número do artigo, não a referência exata do trecho. Assim, `26-I` pode contar como acerto para uma pergunta cuja resposta específica está em `26-II`.
 - As anotações ficam no nível do artigo, sem indicar qual dispositivo foi alterado.
 - O conjunto de avaliação ainda é pequeno. Há uma pergunta sem artigo esperado no CDC, mas o buscador ainda retorna o artigo mais próximo e não avalia abstenção.
 
@@ -153,8 +224,17 @@ Na rodada inicial, os erros mais informativos foram:
 
 - [x] Avaliação ampliada em `avaliacao.csv` e execução por `avaliar.py`
 - [x] Corrigir os resíduos de limpeza no art. 6º, III, e no art. 39, XI, e medir o efeito; o resultado permaneceu em 11/14
-- [ ] Testar chunks adicionais por inciso nos artigos-lista, sempre com o caput; começar pelo art. 39 e comparar com a avaliação
-- [ ] Geração da resposta com LLM, **citando o artigo** que a fundamenta
+- [x] Separar `artigos` e `trechos` no banco
+- [x] Indexar os 118 artigos e 258 trechos
+- [x] Adaptar a busca para consultar `trechos` e recuperar o artigo relacionado
+- [x] Medir Top-1 e Recall@5
+- [ ] Testar `k=10` nas duas perguntas que não recuperam o art. 39 no top 5
+- [ ] Ampliar a avaliação para o identificador exato do trecho (`26-II`, `39-I` etc.)
+- [ ] Estudar reordenação/reranking para melhorar o Top-1
+- [ ] Avaliar múltiplas consultas sem alterar artificialmente o conjunto oficial de perguntas
+- [x] Protótipo de resposta com Qwen e citação do trecho recuperado
+- [x] Teste de abstenção quando o contexto não responde à pergunta
+- [x] Documentar a limitação da busca semântica e da geração livre
 - [ ] Incluir o Código Civil e outras leis
 
 ---

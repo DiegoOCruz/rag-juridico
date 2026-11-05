@@ -1,0 +1,41 @@
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import mm
+from reportlab.lib.colors import HexColor
+from reportlab.platypus import SimpleDocTemplate, Paragraph, PageBreak
+from pathlib import Path
+out=Path('output/Diego_Oliveira_da_Cruz_CV_English.pdf')
+s=getSampleStyleSheet()
+s.add(ParagraphStyle(name='N',parent=s['Title'],fontName='Helvetica-Bold',fontSize=20,leading=23,textColor=HexColor('#16324F'),alignment=0,spaceAfter=1))
+s.add(ParagraphStyle(name='H',parent=s['Normal'],fontName='Helvetica-Bold',fontSize=9,leading=11,textColor=HexColor('#287271'),spaceAfter=4))
+s.add(ParagraphStyle(name='S',parent=s['Heading2'],fontName='Helvetica-Bold',fontSize=9,leading=10,textColor=HexColor('#287271'),spaceBefore=5,spaceAfter=2,keepWithNext=True))
+s.add(ParagraphStyle(name='C',parent=s['BodyText'],fontSize=8.4,leading=10.2,textColor=HexColor('#202B36'),spaceAfter=2.2))
+s.add(ParagraphStyle(name='J',parent=s['BodyText'],fontName='Helvetica-Bold',fontSize=8.5,leading=10,textColor=HexColor('#16324F'),spaceBefore=3,spaceAfter=1,keepWithNext=True))
+s.add(ParagraphStyle(name='B',parent=s['BodyText'],fontSize=8.1,leading=9.8,leftIndent=9,firstLineIndent=-7,textColor=HexColor('#202B36'),spaceAfter=1.2))
+z=[]
+def p(t,k='C'): z.append(Paragraph(t,s[k]))
+def sec(t): p(t.upper(),'S')
+def b(t): p('&bull; '+t,'B')
+p('DIEGO OLIVEIRA DA CRUZ','N'); p('BACKEND ENGINEER · APPLIED AI','H'); p('Turning business problems into reliable backends.','C'); p('Penápolis, SP, Brazil | doc89@outlook.com.br | github.com/DiegoOCruz','C')
+sec('Professional Summary')
+p('Software engineering professional with a law degree and 15+ years of experience at the intersection of business operations, requirements, risk analysis, and process improvement. Focused on backend development and applied AI, with hands-on projects using Java, Spring Boot, Python, PostgreSQL/pgvector, Ollama, and retrieval-augmented generation (RAG). Combines software engineering practices with the ability to understand business problems, model domain rules, and turn requirements into reliable technical solutions.')
+sec('Technical Skills')
+p('<b>Backend &amp; APIs:</b> Java, Spring Boot, REST APIs, microservices, Spring Cloud'); p('<b>Applied AI:</b> Python, local LLMs (Ollama), RAG, semantic search, embeddings, computer vision workflows'); p('<b>Data:</b> SQL, PostgreSQL, pgvector, NumPy, Pandas, relational modeling'); p('<b>Engineering &amp; Delivery:</b> Docker, Git, event-driven communication, Domain-Driven Design (DDD), UML, Scrum'); p('<b>Business &amp; Domain:</b> Requirements gathering, business rules, process and risk analysis, financial operations, Brazil’s LGPD data protection law')
+sec('Selected Projects')
+p('<b>AI-Academic-Reviewer — Local AI-assisted review pipeline:</b> Designed and implemented a Python/Ollama pipeline that extracts PDF content, analyzes images with a vision model, and generates consolidated Excel reports. Majority voting across runs improves reliability; results were compared with manual reviews.')
+p('<b>Legal RAG — Brazilian legislation search and answers:</b> Developed a RAG system for Brazil’s Consumer Defense Code, combining legal text structuring, semantic retrieval, and grounded answers from local models with PostgreSQL/pgvector. GitHub: github.com/DiegoOCruz/rag-juridico')
+p('<b>RAG from Scratch — Semantic search:</b> Built a pipeline without off-the-shelf RAG frameworks, using NumPy, Ollama, PostgreSQL, and pgvector. Applied it to 41,000 reviews processed with local LLMs, including bottleneck analysis and vector query optimization. GitHub: github.com/DiegoOCruz/estudos-ia')
+p('<b>DDD Microservices — Spring Boot and Spring Cloud:</b> Modeled domain logic using DDD, including a ubiquitous language, business rules concentrated in the domain layer, and event-driven communication between services.')
+p('<b>Affiliate Deal Automation — n8n:</b> Mapped and automated a manual deal promotion workflow through integrations across platforms. Workflow in production.')
+sec('Professional Experience')
+p('Teaching Assistant | Backend Development Course — Instituto Infnet | 2026','J'); b('Supported backend development learning activities.'); b('Developed AI-Academic-Reviewer, a local LLM pipeline that extracts and analyzes PDF and image content and generates consolidated Excel reports.'); b('Validated the pipeline against manual reviews; in some cases, results were equivalent to or better than manual review.')
+p('Founder | MF Colecionáveis | Apr 2025–Present · Part-time','J'); b('Created and operate an online collectibles and made-to-order 3D printing store, managing operations from distributor purchasing through sales and after-sales support.'); b('Generated six-figure revenue in 2026 and completed 500+ sales with no delays or cancellations; earned Mercado Livre’s highest seller reputation and an invitation to use Mercado Livre Full.'); b('Investigated return causes and reduced the rate from 15% to 2% through a packaging and process change at virtually no cost.'); b('Structured order, inventory, and tax invoicing workflows using Olist.')
+z.append(PageBreak()); sec('Professional Experience (continued)')
+p('Managing Partner | Zadoc Couros Ltda. | Sep 2009–Present · Penápolis, SP','J'); b('Works across several operational areas, currently focused on financial management, at a leather industry company exporting to Nigeria, China, Italy, Vietnam, and other markets.'); b('Analyzed freight costs and led a change that reduced the rate from BRL 6.50/km to BRL 4.50/km (approximately 31%), while eliminating the company-owned fleet.'); b('Coordinated end-to-end exports, liaising with international customers, customs brokers, shipping lines, freight forwarders, and banks.'); b('Defined management reports and metrics, including income statements, cash flow, and forecasts; traceable records enabled a response within 30 minutes to a bank audit of shipments up to two years old.'); b('Led company restructuring during the pandemic, renegotiating with customers and suppliers and reassessing markets and products.')
+p('Attorney | Independent Practice | Jun 2012–Nov 2022','J'); b('Practiced corporate, tax, labor, civil, family, and social security law.'); b('Interviewed clients to identify underlying issues, organize facts, and assess rules and risks before defining a strategy.'); b('Drafted and reviewed commercial contracts, translating business agreements into clear, verifiable obligations, rules, and conditions.'); b('Conducted preventive tax planning and analyzed the effects of different corporate structures.')
+p('Administrative Assistant | Nova Aliança Couros | Mar 2005–Aug 2009 · Penápolis, SP','J'); b('Handled accounts payable and receivable, invoicing, tax controls, and process optimization across departments.')
+sec('Education'); b('B.S. in Software Engineering — Instituto Infnet (2022–2026)'); b('Bachelor of Laws (LL.B.) — Unitoledo (2011)')
+sec('Courses'); b('English Law — EF International School, Chicago (2013)'); b('Business English — CCAA (2021)'); b('Mediation and Arbitration — CAMANP (2011)'); b('Tax Law — LFG (2011)')
+sec('Languages'); b('Portuguese — Native'); b('English — Advanced listening and conversation; fluent reading; intermediate writing')
+SimpleDocTemplate(str(out),pagesize=A4,rightMargin=15*mm,leftMargin=15*mm,topMargin=11*mm,bottomMargin=11*mm,title='Diego Oliveira da Cruz - CV (English)').build(z)
+print(out.resolve())

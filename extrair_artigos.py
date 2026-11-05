@@ -10,11 +10,71 @@ PADRAO_ANOTACAO = re.compile(
     r"\s*\((?:Incluíd[oa]|Redação dada|Vigência)[^()]*\)", re.IGNORECASE
 )
 NOME_LEI = "Código de Defesa do Consumidor (Lei nº 8.078/1990)"
+PADRAO_PARAGRAFO = re.compile(r"^§\s*(\d+)[º°]?", re.IGNORECASE)
+PADRAO_INCISO = re.compile(r"^([IVXLCDM]+)\s+-")
 
 
 def montar_texto(art, nome_lei):
     hierarquia = [n for n in (art["titulo"], art["capitulo"], art["secao"]) if n]
     return "\n".join([nome_lei] + hierarquia + art["dispositivos"])
+
+def localizar_incisos(art):
+    caput = art["dispositivos"][0]
+
+    contexto_pai = caput
+    referencia_pai = None
+    incisos = []
+
+    for dispositivo in art["dispositivos"][1:]:
+        paragrafo = PADRAO_PARAGRAFO.match(dispositivo)
+
+        if paragrafo:
+            referencia_pai = f"§{paragrafo.group(1)}"
+            contexto_pai = dispositivo
+            continue
+
+        inciso = PADRAO_INCISO.match(dispositivo)
+
+        if inciso:
+            numero_inciso = inciso.group(1)
+
+            if referencia_pai:
+                referencia = f"{referencia_pai}-{numero_inciso}"
+            else:
+                referencia = numero_inciso
+
+            incisos.append(
+                {
+                    "referencia": referencia,
+                    "contexto_pai": contexto_pai,
+                    "texto": dispositivo,
+                }
+            )
+
+    return incisos
+
+def montar_chunk_inciso(art, inciso):
+    caput = art["dispositivos"][0]
+
+    dispositivos_do_chunk = [caput]
+
+    if inciso["contexto_pai"] != caput:
+        dispositivos_do_chunk.append(inciso["contexto_pai"])
+
+    dispositivos_do_chunk.append(inciso["texto"])
+
+    art_do_chunk = {
+        **art,
+        "dispositivos": dispositivos_do_chunk,
+    }
+
+    return {
+        "id_chunk": f"{art['numero']}-{inciso['referencia']}",
+        "numero_art": art["numero"],
+        "texto": montar_texto(art_do_chunk, NOME_LEI),
+        "tipo": "inciso",
+        "referencia": inciso["referencia"],
+    }
 
 
 def ler_paragrafos(caminho):
@@ -99,21 +159,52 @@ if __name__ == "__main__":
     artigos = limpar_artigos(agrupar_artigos(ler_paragrafos("dados/cdc.htm")))
     print(len(artigos))
 
-    for numero in ["4", "51"]:
-        art = next(a for a in artigos if a["numero"] == numero)
-        print(f"\n=== Art. {numero} ===")
-        print("Anotações:", art["anotacoes"])
-        for d in art["dispositivos"]:
-            print("  -", d[:90])
+    # for numero in ["4", "51"]:
+    #     art = next(a for a in artigos if a["numero"] == numero)
+    #     print(f"\n=== Art. {numero} ===")
+    #     print("Anotações:", art["anotacoes"])
+    #     for d in art["dispositivos"]:
+    #         print("  -", d[:90])
 
-    print("\nArt. 11 ainda existe?", any(a["numero"] == "11" for a in artigos))
+    # print("\nArt. 11 ainda existe?", any(a["numero"] == "11" for a in artigos))
     
-    tamanhos = sorted(
-    ((len("\n".join(a["dispositivos"])), a["numero"]) for a in artigos),
-    reverse=True,
+    # tamanhos = sorted(
+    # ((len("\n".join(a["dispositivos"])), a["numero"]) for a in artigos),
+    # reverse=True,
+    # )
+    # print("Mais longos:", tamanhos[:5])
+    # print("Mais curtos:", tamanhos[-5:])
+    
+    # art17 = next(a for a in artigos if a["numero"] == "17")
+    # print(montar_texto(art17, NOME_LEI))
+    
+    # print("\n=== Chunk do inciso I do art. 39 ===")
+    # art39 = next(art for art in artigos if art["numero"] == "39")
+    # chunk = montar_chunk_inciso(art39, "I")
+
+    # print(chunk["id_chunk"])
+    # print(chunk["texto"])
+    # print('-' * 40)    
+    # print("\n=== Chunk do inciso II do art. 39 ===")
+    # art39 = next(art for art in artigos if art["numero"] == "39")
+    # chunk = montar_chunk_inciso(art39, "II")
+
+    # print(chunk["id_chunk"])
+    # print(chunk["texto"])
+    art12 = next(art for art in artigos if art["numero"] == "12")
+
+    for inciso in localizar_incisos(art12):
+        print(inciso["referencia"])
+        print("  Pai:", inciso["contexto_pai"])
+        print("  Texto:", inciso["texto"])
+        inciso = next(
+            inciso
+        for inciso in localizar_incisos(art12)
+        if inciso["referencia"] == "§3-I"
     )
-    print("Mais longos:", tamanhos[:5])
-    print("Mais curtos:", tamanhos[-5:])
-    
-    art17 = next(a for a in artigos if a["numero"] == "17")
-    print(montar_texto(art17, NOME_LEI))
+
+    chunk = montar_chunk_inciso(art12, inciso)
+
+    print("\n=== Chunk 12-§3-I ===")
+    print(chunk["id_chunk"])
+    print(chunk["texto"])
